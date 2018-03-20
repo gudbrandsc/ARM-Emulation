@@ -66,69 +66,87 @@ int get_funct(unsigned int iw)
 	return 1;
       }else if(opcode == 0b0010){ // if its a sub
 	return 2;
-      } else if(opcode == 0b1010){ // if its a cmp
-	printf("is cmp");
+      } else if(opcode == 0b1101){ // if its a mov
 	return 3;
       }else{
       return false;
       }
     }
 }
-void armemu_add(struct arm_state *state)
-{
+
+void armemu_add(struct arm_state *state){
     unsigned int iw;
-    unsigned int rd, rn, rm;
+    unsigned int rd, rn, rm, i;
 
     iw = *((unsigned int *) state->regs[PC]);
-    
+    i = (iw >> 25) & 1;
     rd = (iw >> 12) & 0xF;
     rn = (iw >> 16) & 0xF;
-    rm = iw & 0xF;
+   
+    if(i == 1){
+      rm = iw & 0xFF;
+      printf("Add R%d, R%d, #%d\n",rd, rn, rm);
+      state->regs[rd] = state->regs[rn] + rm;
+    }else{
+      rm = iw & 0xF;
+      printf("Add R%d, R%d, R%d\n", rd, rn, rm);
+      state->regs[rd] = state->regs[rn] + state->regs[rm];
 
-    state->regs[rd] = state->regs[rn] + state->regs[rm];
-    printf("Adding: %d + %d to R%d\n",state->regs[rn], state->regs[rm], rd);
+    }
+    
     if (rd != PC) {
-        state->regs[PC] = state->regs[PC] + 4;
+      state->regs[PC] = state->regs[PC] + 4;
     }
 }
 
 void armemu_sub(struct arm_state *state)
 {
     unsigned int iw;
-    unsigned int rd, rn, rm;
+    unsigned int rd, rn, rm, i;
 
     iw = *((unsigned int *) state->regs[PC]);
-    
+
+    i = (iw >> 25) & 1;
     rd = (iw >> 12) & 0xF;
     rn = (iw >> 16) & 0xF;
-    rm = iw & 0xF;
 
-    state->regs[rd] = state->regs[rn] - state->regs[rm];
-    printf("Subtract: %d - %d to R%d\n",state->regs[rn], state->regs[rm], rd);
+
+    if(i == 1){
+      rm = iw & 0xF;
+      printf("Sub R%d, R%d,  #%d\n", rd, rn, rm);
+      state->regs[rd] = state->regs[rn] - rm;
+    }else{
+      rm = iw & 0xF;
+      printf("Sub R%d, R%d,  R%d\n", rd, rn, rm);
+      state->regs[rd] = state->regs[rn] - state->regs[rm];
+    }
+    
     if (rd != PC) {
         state->regs[PC] = state->regs[PC] + 4;
     }
 }
 
- void armemu_cmp(struct arm_state *state)
+ void armemu_mov(struct arm_state *state)
 {
   unsigned int iw;
-  unsigned int setflag, rd, rn, rm;
+  unsigned int rd, rn, rm, i;
     
     iw = *((unsigned int *) state->regs[PC]);
-    
-    setflag = (iw >> 20) & 1;
+    i = (iw >> 25) & 1;
     rd = (iw >> 12) & 0xF;
-    rn = (iw >> 16) & 0xF;
-    rm = iw & 0xF;
-    if(setflag == 1){
-      state->cpsr = 1;
-    }else if (setflag == 0){
-      state->cpsr = -1;
+    //    rn = (iw >> 16) & 0xF;
+
+    if(i == 1){
+      rm = iw & 0xFF;
+      printf("MOV R%d, #%d\n", rd, rm);
+      state->regs[rd] = rm;
     }else{
-      state->cpsr = 0;
+    rm = iw & 0xF;
+    printf("MOV R%d, R%d\n", rd, rm);
+    state->regs[rd] = state->regs[rm];
     }
-    printf("CMP: %d + %d to CPSR = %d\n",state->regs[rn], state->regs[rm], setflag);
+    
+    
   if (rd != PC) {
         state->regs[PC] = state->regs[PC] + 4;
     }
@@ -173,7 +191,7 @@ void armemu_bx(struct arm_state *state)
 	armemu_sub(state);
 	break;
       case 3 :
-	armemu_cmp(state);
+	armemu_mov(state);
 	break;
       default :
 	printf("default");
@@ -184,14 +202,16 @@ void armemu_bx(struct arm_state *state)
 
 unsigned int armemu(struct arm_state *state)
 {
-  int num_instructions = 0; 
-    while (state->regs[PC] != 0) {
-      arm_state_print(state);
-      armemu_one(state);
-      num_instructions += 1;
-    }
-    printf("Num instructions executed: %d\n", num_instructions);
-    return state->regs[0];
+  int num_instructions = 0;
+
+  while (state->regs[PC] != 0) {
+    arm_state_print(state);
+    armemu_one(state);
+    num_instructions += 1;
+  }
+  
+  printf("Num instructions executed: %d\n", num_instructions);
+  return state->regs[0];
 }
                   
     
