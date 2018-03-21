@@ -9,6 +9,7 @@
 #define PC 15
 
 int add_s(int a, int b);
+int sum_array_s(int *array, int i);
 
 struct arm_state {
     unsigned int regs[NREGS];
@@ -45,10 +46,10 @@ void arm_state_init(struct arm_state *as, unsigned int *func,
 
 void arm_state_print(struct arm_state *as)
 {
-    int i;
-
+  int i;
+  
     for (i = 0; i < NREGS; i++) {
-        printf("reg[%d] = %d\n", i, as->regs[i]);
+      printf("reg[%d] = %d\n", i, as->regs[i]);
     }
     printf("cpsr = %X\n", as->cpsr);
 }
@@ -56,25 +57,65 @@ void arm_state_print(struct arm_state *as)
 
 int get_process_inst(unsigned int iw)
 {
+  
   unsigned int op;
-  unsigned int opcode;
+  unsigned int cmd;
   
     op = (iw >> 26) & 0b11;
-    opcode = (iw >> 21) & 0b1111;
-    if(op ==0){
-      if(opcode == 0b0100){ // if its a add
-	return 1;
-      }else if(opcode == 0b0010){ // if its a sub
-	return 2;
-      } else if(opcode == 0b1101){ // if its a mov
-	return 3;
-      }else if(opcode == 0b1010){
-	return 4;
-      }else{
+    cmd = (iw >> 21) & 0b1111;
+    
+    if(cmd == 0b0100){ // if its a add
+      return 1;
+    }else if(cmd == 0b0010){ // if its a sub
+      return 2;
+    } else if(cmd == 0b1101){ // if its a mov
+      return 3;
+    }else if(cmd == 0b1010){
+      return 4;
+    }else{
       return false;
-      }
     }
 }
+int get_memory_inst(struct arm_state *state)
+{
+  unsigned int op;
+  unsigned int load, byte,rn,rd,rm, iw;
+  
+  load = (iw >> 20) & 0b1;
+  byte = (iw >> 22) & 0b1;
+  rn = (iw >> 16) & 0xF;
+  rd = (iw >> 12) & 0xF;
+  iw = *((unsigned int *) state->regs[PC]);
+  if(load == 0 && byte == 0){
+    rm = (iw >> 0) & 0xF;
+    state->regs[rn+rm] = state->regs[rd];
+    printf("set new value to reg %d\n", rn+rm);
+    printf("set new value %d\n", state->regs[rd]);
+    
+    printf("STR");
+  }else if(load == 0 && byte == 1){
+    printf("STRB");
+  }else if(load == 1 && byte == 0){
+    printf("LDR");
+  }else if(load == 1 && byte == 1){
+    printf("LDRB");
+  }
+  
+  //  op = (iw >> 26) & 0b11;
+  //  opcode = (iw >> 21) & 0b1111;
+  
+  
+ }
+
+//Handle branch
+void armemu_branch(struct arm_state *state){
+  unsigned int imm24, iw;
+  iw = *((unsigned int *) state->regs[PC]);
+  imm24 = (iw & 0xFFFFFF);
+  state->regs[PC] += 8;
+  state->regs[PC] += imm24 << 2;
+}
+
 unsigned int rightRotate(int n, unsigned int d)
 {
   /* In n<<d, last d bits are 0. To put first 3 bits of n at 
@@ -85,12 +126,12 @@ unsigned int rightRotate(int n, unsigned int d)
 
 void armemu_add(struct arm_state *state){
   unsigned int iw,rd, rn, rm, i, rot;
-
+  
   iw = *((unsigned int *) state->regs[PC]);
   i = (iw >> 25) & 1;
   rd = (iw >> 12) & 0xF;
   rn = (iw >> 16) & 0xF;
-
+  
   if(i == 1){
     rot = (iw >> 8) & 0xF;
     rm = iw & 0xFF;
@@ -102,25 +143,25 @@ void armemu_add(struct arm_state *state){
     rm = iw & 0xF;
     printf("Add R%d, R%d, R%d\n", rd, rn, rm);
     state->regs[rd] = state->regs[rn] + state->regs[rm];
-      
+    
   }
   
-    if (rd != PC) {
-      state->regs[PC] = state->regs[PC] + 4;
-    }
+  if (rd != PC) {
+    state->regs[PC] = state->regs[PC] + 4;
+  }
 }
 
 void armemu_sub(struct arm_state *state)
 {
   unsigned int iw, rd, rn, rm, i, rot;
-
-    iw = *((unsigned int *) state->regs[PC]);
-    i = (iw >> 25) & 1;
-    rd = (iw >> 12) & 0xF;
-    rn = (iw >> 16) & 0xF;
-
-
-    if(i == 1){
+  
+  iw = *((unsigned int *) state->regs[PC]);
+  i = (iw >> 25) & 1;
+  rd = (iw >> 12) & 0xF;
+  rn = (iw >> 16) & 0xF;
+  
+    
+  if(i == 1){
     rot = (iw >> 8) & 0xF;
     rm = iw & 0xFF;
     rot = rot * 2;
@@ -166,6 +207,7 @@ void armemu_mov(struct arm_state *state)
       state->regs[PC] = state->regs[PC] + 4;
     }
 }
+
 void armemu_cmp(struct arm_state *state)
 {
    unsigned int iw, rd, rn, rm, i;
@@ -216,14 +258,6 @@ void armemu_bx(struct arm_state *state)
     state->regs[PC] = state->regs[rn];
 }
 
-void armemu_branch(struct arm_state *state){
-  unsigned int imm24, iw;
-  iw = *((unsigned int *) state->regs[PC]);
-  imm24 = (iw & 0xFFFFFF);
-  state->regs[PC] += 8;
-  state->regs[PC] += imm24 << 2;
-}
-
 void armemu_data_process(struct arm_state *state)
 {
   unsigned int iw;
@@ -255,15 +289,37 @@ void armemu_data_process(struct arm_state *state)
 }
 
 int get_instruction_type(struct arm_state *state){
-  unsigned int op, iw;
+  unsigned int op, iw, cond;
   iw = *((unsigned int *) state->regs[PC]);
   op = (iw >> 26) & 0b0011;
+  cond = (iw >> 28) & 0xF;
+  if((cond == 0 || cond == 10 || cond == 12) && (state->cpsr == 0)){
+    if(op == 0){
+      armemu_data_process(state);
+    }else if(op == 1){
+      get_memory_inst(state);
+    }else if(op == 2){
+      armemu_branch (state);
+    }
+  }else if((cond == 1 || cond == 1) && (state->cpsr == 1)){
+    if(op == 0){
+      armemu_data_process(state);
+    }else if(op == 1){
+      get_memory_inst(state);
+    }else if(op == 2){
+      armemu_branch (state);
+    }
+  }else if(cond == 14){
   if(op == 0){
-    armemu_data_process(state);
-  }else if(op == 1){
-    printf("data memory");
-  }else if(op == 2){
-    armemu_branch (state);
+      armemu_data_process(state);
+    }else if(op == 1){
+      get_memory_inst(state);
+    }else if(op == 2){
+      armemu_branch (state);
+    }
+  }else{
+    printf("invalid cond cpsr:%d and cond = %d\n",state->cpsr, cond);
+    state->regs[PC] = state->regs[PC] + 4;
   }
 }
 
@@ -286,7 +342,6 @@ unsigned int armemu(struct arm_state *state)
  {
    struct arm_state state;
    unsigned int r;
-   
    arm_state_init(&state, (unsigned int *) add_s, 1, 2, 0, 0);
    r = armemu(&state);
    
