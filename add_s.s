@@ -2,7 +2,14 @@
 	.func add_s
 
 add_s:
-	str r1, [r2,r1]
+	sub sp, sp, #16
+	str lr, [sp]
+	str r1, [sp, #4]
+	ldr r7,[sp, #4]	
+//	ldr r1,[sp]
+	add sp, sp, #16
+	//	LDRB r6, [r0,r1]
+//	str r1, [r0,r5]
 //	cmp r1,#4080
 //	add r3, r0, #4080
 //	addeq r3, r0, r3

@@ -37,10 +37,10 @@ void arm_state_init(struct arm_state *as, unsigned int *func,
     as->regs[PC] = (unsigned int) func;
     as->regs[SP] = (unsigned int) &as->stack[STACK_SIZE];
     as->regs[LR] = 0;
-
-    as->regs[0] = arg0;
+    char array[] = {'a','b','c'};
+    as->regs[0] = array;
     as->regs[1] = arg1;
-    as->regs[2] = arg2;
+    as->regs[2] = arg2;//arg2;
     as->regs[3] = arg3;
 }
 
@@ -79,32 +79,51 @@ int get_process_inst(unsigned int iw)
 int get_memory_inst(struct arm_state *state)
 {
   unsigned int op;
-  unsigned int load, byte,rn,rd,rm, iw;
+  unsigned int load, byte,rn,rd,offset, iw, dest, sp, u;
   
+  iw = *((unsigned int *) state->regs[PC]);  
   load = (iw >> 20) & 0b1;
   byte = (iw >> 22) & 0b1;
   rn = (iw >> 16) & 0xF;
   rd = (iw >> 12) & 0xF;
-  iw = *((unsigned int *) state->regs[PC]);
-  if(load == 0 && byte == 0){
-    rm = (iw >> 0) & 0xF;
-    state->regs[rn+rm] = state->regs[rd];
-    printf("set new value to reg %d\n", rn+rm);
-    printf("set new value %d\n", state->regs[rd]);
-    
-    printf("STR");
+  offset = iw & 0xFF;
+  u = (iw >>23) & 0b1;
+  sp = state->regs[13];
+  //TODO Add immitiate
+  printf("sp %d\n",sp);
+  if(load == 0 && byte == 0){ // STR
+    if(u == 1){
+          printf("str %d\n", state->regs[rn] + offset);
+      *((unsigned int *)state->regs[rn] + offset) = state->regs[rd];
+      
+    }else{
+      *((unsigned int *)state->regs[rn] - offset) = state->regs[rd];
+    }
   }else if(load == 0 && byte == 1){
     printf("STRB");
   }else if(load == 1 && byte == 0){
-    printf("LDR");
+    printf("ldr\n");
+    if(u == 1){
+      printf("before %d\n",rd);
+      state->regs[rd] = (sp + offset);
+      printf("after :::: %c\n", state->regs[rd]);
+      printf("%d asdasdsadsad\n", sp + offset);  
+    }else{
+      printf("u0\n");
+      *(unsigned int *) state->regs[rn] = state->stack[13] - offset;
+
+    }
+
   }else if(load == 1 && byte == 1){
-    printf("LDRB");
+
+    //    state->regs[rd] = *(unsigned int*) state->regs[rn] + rm;
+    
+    printf("LDRB \n");
+    
   }
-  
+  state->regs[PC] = state->regs[PC] + 4;
   //  op = (iw >> 26) & 0b11;
-  //  opcode = (iw >> 21) & 0b1111;
-  
-  
+  //  opcode = (iw >> 21) & 0b1111; 
  }
 
 //Handle branch
@@ -131,7 +150,7 @@ void armemu_add(struct arm_state *state){
   i = (iw >> 25) & 1;
   rd = (iw >> 12) & 0xF;
   rn = (iw >> 16) & 0xF;
-  
+
   if(i == 1){
     rot = (iw >> 8) & 0xF;
     rm = iw & 0xFF;
@@ -328,7 +347,7 @@ unsigned int armemu(struct arm_state *state)
   int num_instructions = 0;
 
   while (state->regs[PC] != 0) {
-    //     arm_state_print(state);
+    arm_state_print(state);
     get_instruction_type(state);
     num_instructions += 1;
   }
