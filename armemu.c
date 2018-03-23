@@ -1,6 +1,6 @@
 #include <stdbool.h>
 #include <stdio.h>
-
+#include <stdlib.h>
 
 #define NREGS 16
 #define STACK_SIZE 1024
@@ -10,6 +10,7 @@
 
 int add_s(int a, int b);
 int sum_array_s(int *array, int i);
+int fib_iter_s(int n);
 
 struct arm_state {
     unsigned int regs[NREGS];
@@ -37,8 +38,7 @@ void arm_state_init(struct arm_state *as, unsigned int *func,
     as->regs[PC] = (unsigned int) func;
     as->regs[SP] = (unsigned int) &as->stack[STACK_SIZE];
     as->regs[LR] = 0;
-    char array[] = {'a','b','c'};
-    as->regs[0] = array;
+    as->regs[0] = arg0;
     as->regs[1] = arg1;
     as->regs[2] = arg2;//arg2;
     as->regs[3] = arg3;
@@ -79,41 +79,53 @@ int get_process_inst(unsigned int iw)
 int get_memory_inst(struct arm_state *state)
 {
   unsigned int op;
-  unsigned int load, byte,rn,rd,offset, iw, dest, sp, u;
+  unsigned int load, byte,rn,rd,offset, iw, dest, sp, u, b, immediate;
   
   iw = *((unsigned int *) state->regs[PC]);  
   load = (iw >> 20) & 0b1;
   byte = (iw >> 22) & 0b1;
+  immediate = (iw >> 25) &0b1;
   rn = (iw >> 16) & 0xF;
   rd = (iw >> 12) & 0xF;
-  offset = iw & 0xFF;
+  if(immediate == 0){
+  offset = iw & 0xEFF; //11 bits
+  }else{
+    offset = iw & 0xF;
+  }
+  
   u = (iw >>23) & 0b1;
   sp = state->regs[13];
   //TODO Add immitiate
-  printf("sp %d\n",sp);
-  if(load == 0 && byte == 0){ // STR
-    if(u == 1){
-          printf("str %d\n", state->regs[rn] + offset);
-      *((unsigned int *)state->regs[rn] + offset) = state->regs[rd];
-      
+  if(load == 0 && byte == 0){ //STR
+    if(u == 1){ 
+      if( byte == 0){
+	*((unsigned int *)(state->regs[rn] + offset)) = state->regs[rd];    
+      }else{
+	*((unsigned char *)(state->regs[rn] + offset)) = state->regs[rd];
+      }
     }else{
-      *((unsigned int *)state->regs[rn] - offset) = state->regs[rd];
+      if( byte == 0){
+	*((unsigned int *)(state->regs[rn] - offset)) = state->regs[rd];    
+      }else{
+	*((unsigned char *)(state->regs[rn] - offset)) = state->regs[rd];
+      }
     }
   }else if(load == 0 && byte == 1){
     printf("STRB");
-  }else if(load == 1 && byte == 0){
-    printf("ldr\n");
+  }else if(load == 1 && byte == 0){// LDR
     if(u == 1){
-      printf("before %d\n",rd);
-      state->regs[rd] = (sp + offset);
-      printf("after :::: %c\n", state->regs[rd]);
-      printf("%d asdasdsadsad\n", sp + offset);  
+      if(byte == 0){
+	state->regs[rd] = *((unsigned int *)(sp + offset));
+      }else{
+	state->regs[rd] = *((unsigned char *)(sp + offset));
+      }
     }else{
-      printf("u0\n");
-      *(unsigned int *) state->regs[rn] = state->stack[13] - offset;
-
+       if(byte == 0){
+	state->regs[rd] = *((unsigned int *)(sp - offset));
+      }else{
+	state->regs[rd] = *((unsigned char *)(sp - offset));
+      }
     }
-
   }else if(load == 1 && byte == 1){
 
     //    state->regs[rd] = *(unsigned int*) state->regs[rn] + rm;
@@ -125,14 +137,35 @@ int get_memory_inst(struct arm_state *state)
   //  op = (iw >> 26) & 0b11;
   //  opcode = (iw >> 21) & 0b1111; 
  }
+int setBit(int value, int b, int index){
+  return ( b << index) | value;
+}
 
 //Handle branch
 void armemu_branch(struct arm_state *state){
-  unsigned int imm24, iw;
+  unsigned int iw, type;
+  int  test, imm24;
+  /*
+  imm24 = 0;
+  test = setBit(imm24, 1, 1);
+  printf("new %d\n", test);
+  */
+  printf("branch\n");
   iw = *((unsigned int *) state->regs[PC]);
-  imm24 = (iw & 0xFFFFFF);
-  state->regs[PC] += 8;
-  state->regs[PC] += imm24 << 2;
+  imm24 = iw & 0x7FFFFF;
+  type = (iw >> 23) & 0b1;
+  for(int i = 31; i >= 23; i--){
+    imm24 = setBit(imm24, type, i);
+  }
+  
+  if(type == 1){
+    imm24 = ~(imm24) + 1;  
+    state->regs[PC] += 8;
+    state->regs[PC] -= imm24 << 2;
+  }else{
+    state->regs[PC] += 8;
+    state->regs[PC] += imm24 << 2;
+  }
 }
 
 unsigned int rightRotate(int n, unsigned int d)
@@ -239,10 +272,14 @@ void armemu_cmp(struct arm_state *state)
 
     if(i == 1){
         rm = iw & 0xFF;
+	printf("cmp: %d = %d\n", state->regs[rn], rm);
 	res = state->regs[rn] - rm;
+	printf("ress: %d\n", res);
     }else{
         rm = iw & 0xF;
-	res = state->regs[rn] - rm;
+	printf("cmp: %d = %d\n", state->regs[rn], state->regs[rm]);
+	res = state->regs[rn] - state->regs[rm];
+	printf("res: %d\n",res);
     }
     
     if(res < 0){
@@ -251,7 +288,7 @@ void armemu_cmp(struct arm_state *state)
       state->cpsr = 0;
     }
     
-    printf("cprs is now : %d\n",state->cpsr);
+    printf("cprs is now : %d\n", state->cpsr);
     if (rd != PC) {
       state->regs[PC] = state->regs[PC] + 4;
     }
@@ -303,6 +340,7 @@ void armemu_data_process(struct arm_state *state)
       break;
     default :
       printf("default");
+      exit(1);
     }
   }
 }
@@ -310,8 +348,9 @@ void armemu_data_process(struct arm_state *state)
 int get_instruction_type(struct arm_state *state){
   unsigned int op, iw, cond;
   iw = *((unsigned int *) state->regs[PC]);
-  op = (iw >> 26) & 0b0011;
+  op = (iw >> 26) & 0b11;
   cond = (iw >> 28) & 0xF;
+  printf("cond: %d  state: %d\n", cond, state->cpsr);
   if((cond == 0 || cond == 10 || cond == 12) && (state->cpsr == 0)){
     if(op == 0){
       armemu_data_process(state);
@@ -361,7 +400,7 @@ unsigned int armemu(struct arm_state *state)
  {
    struct arm_state state;
    unsigned int r;
-   arm_state_init(&state, (unsigned int *) add_s, 1, 2, 0, 0);
+   arm_state_init(&state, (unsigned int *) fib_iter_s, 20, 0, 0, 0);
    r = armemu(&state);
    
    printf("r = %d\n", r);

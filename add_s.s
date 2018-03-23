@@ -5,7 +5,9 @@ add_s:
 	sub sp, sp, #16
 	str lr, [sp]
 	str r1, [sp, #4]
-	ldr r7,[sp, #4]	
+	str r3, [sp, #8]
+	ldr r7,[sp, #4]
+	ldr r8, [sp, #8]
 //	ldr r1,[sp]
 	add sp, sp, #16
 	//	LDRB r6, [r0,r1]
