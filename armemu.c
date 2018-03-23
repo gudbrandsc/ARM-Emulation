@@ -18,9 +18,7 @@ struct arm_state {
     unsigned char stack[STACK_SIZE];
 };
 
-void arm_state_init(struct arm_state *as, unsigned int *func,
-                    unsigned int arg0, unsigned int arg1,
-                    unsigned int arg2, unsigned int arg3)
+void arm_state_init(struct arm_state *as, unsigned int *func)
 {
     int i;
 
@@ -38,10 +36,10 @@ void arm_state_init(struct arm_state *as, unsigned int *func,
     as->regs[PC] = (unsigned int) func;
     as->regs[SP] = (unsigned int) &as->stack[STACK_SIZE];
     as->regs[LR] = 0;
-    as->regs[0] = arg0;
-    as->regs[1] = arg1;
-    as->regs[2] = arg2;//arg2;
-    as->regs[3] = arg3;
+    //    as->regs[0] = arg0;
+    // as->regs[1] = arg1;
+    // as->regs[2] = arg2;//arg2;
+    // as->regs[3] = arg3;
 }
 
 void arm_state_print(struct arm_state *as)
@@ -386,7 +384,6 @@ unsigned int armemu(struct arm_state *state)
   int num_instructions = 0;
 
   while (state->regs[PC] != 0) {
-    arm_state_print(state);
     get_instruction_type(state);
     num_instructions += 1;
   }
@@ -394,16 +391,48 @@ unsigned int armemu(struct arm_state *state)
   printf("Num instructions executed: %d\n", num_instructions);
   return state->regs[0];
 }
-                  
+void sum_array_test(struct arm_state *state){
+  unsigned int res;
+  int array[] = {1,2,3,4,5};
+
+   
+   state->regs[0] = array;
+   state->regs[1] = 5;
+   printf("------sum array \n------");
+   res = armemu(state);
+   printf("sum_array_s() = %d\n", res);
+
+}
+
+void fib_iter_test(struct arm_state *state, int n){
+  unsigned int res;
+
+   
+   state->regs[0] = n;
+   printf("------fib iter with value %d\n------", n);
+   res = armemu(state);
+   printf("fib_iter_s(%d) = %d\n", n, res);
+}
+void print_analysis(struct arm_state *state){
+  printf("------ARM emu analysis------\n");
+   arm_state_print(state);
+   //Stack   
+}
+
     
  int main(int argc, char **argv)
  {
    struct arm_state state;
-   unsigned int r;
-   arm_state_init(&state, (unsigned int *) fib_iter_s, 20, 0, 0, 0);
-   r = armemu(&state);
+   arm_state_init(&state, (unsigned int *) fib_iter_s);
+   //   fib_iter_test(&state, 20);
+   // print_analysis(&state);
+   arm_state_init(&state, (unsigned int *) sum_array_s);
+    sum_array_test(&state);
+   //unsigned int r;
+   //   arm_state_init(&state, (unsigned int *) fib_iter_s, 20, 0, 0, 0);
+   // r = armemu(&state);
+
    
-   printf("r = %d\n", r);
    
    return 0;
  }
