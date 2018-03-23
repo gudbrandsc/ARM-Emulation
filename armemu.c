@@ -77,7 +77,7 @@ int get_process_inst(unsigned int iw)
 int get_memory_inst(struct arm_state *state)
 {
   unsigned int op;
-  unsigned int load, byte,rn,rd,offset, iw, dest, sp, u, b, immediate;
+  unsigned int load, byte,rn,rd,offset, iw, target, sp, u, b, immediate, value;
   
   iw = *((unsigned int *) state->regs[PC]);  
   load = (iw >> 20) & 0b1;
@@ -85,23 +85,30 @@ int get_memory_inst(struct arm_state *state)
   immediate = (iw >> 25) &0b1;
   rn = (iw >> 16) & 0xF;
   rd = (iw >> 12) & 0xF;
-  if(immediate == 0){
-  offset = iw & 0xEFF; //11 bits
-  }else{
-    offset = iw & 0xF;
-  }
-  
   u = (iw >>23) & 0b1;
   sp = state->regs[13];
+  
   //TODO Add immitiate
   if(load == 0 && byte == 0){ //STR
+    if(immediate == 0){
+      offset = iw & 0xFFF; //11 bits
+      printf("imm12 %d\n", offset);
+      printf("STR R%d, [R%d, #%d] \n",rd,rn, offset);
+    }else{
+      offset = iw & 0xF;
+      //todo
+      printf("STR R%d, [R%d, R%d] \n",rd,rn, offset);
+    }
+    printf("u = %d\n",u);
     if(u == 1){ 
-      if( byte == 0){
+      printf("byte = %d\n",byte);
+      if(byte == 0){
 	*((unsigned int *)(state->regs[rn] + offset)) = state->regs[rd];    
       }else{
 	*((unsigned char *)(state->regs[rn] + offset)) = state->regs[rd];
       }
     }else{
+            printf("is 1");
       if( byte == 0){
 	*((unsigned int *)(state->regs[rn] - offset)) = state->regs[rd];    
       }else{
@@ -110,18 +117,30 @@ int get_memory_inst(struct arm_state *state)
     }
   }else if(load == 0 && byte == 1){
     printf("STRB");
+
+
+    
   }else if(load == 1 && byte == 0){// LDR
+    if(immediate == 0){
+      offset = iw & 0xFFF; //11 bits
+      printf("imm12 %d\n", offset);
+    }else{
+      offset = iw & 0xF;
+      value = state->regs[rn] + state->regs[offset];
+      printf("LDR R%d, [R%d, R%d] == %d\n",rd,rn, offset, value);
+    }
+    
     if(u == 1){
       if(byte == 0){
-	state->regs[rd] = *((unsigned int *)(sp + offset));
+	state->regs[rd] = *((unsigned int *)(value ));
       }else{
-	state->regs[rd] = *((unsigned char *)(sp + offset));
+	state->regs[rd] = *((unsigned char *)(value));
       }
     }else{
        if(byte == 0){
-	state->regs[rd] = *((unsigned int *)(sp - offset));
+	state->regs[rd] = *((unsigned int *)(value));
       }else{
-	state->regs[rd] = *((unsigned char *)(sp - offset));
+	state->regs[rd] = *((unsigned char *)(value));
       }
     }
   }else if(load == 1 && byte == 1){
@@ -232,7 +251,7 @@ void armemu_sub(struct arm_state *state)
 
 void armemu_mov(struct arm_state *state)
 {
-  unsigned int iw, rd, rn, rm, i, rot;
+  unsigned int iw, rd, rn, rm, i, rot, rsr, shamt5, sh;
     
     iw = *((unsigned int *) state->regs[PC]);
     i = (iw >> 25) & 1;
@@ -247,9 +266,22 @@ void armemu_mov(struct arm_state *state)
       printf("MOV R%d, #%d\n", rd, rm);
       state->regs[rd] = rm;
     }else{
+      rsr = (iw >> 4) & 0b1;
       rm = iw & 0xF;
+      if(rsr == 0 ){
+	shamt5 = (iw >> 7) & 0b11111;
+	sh = (iw >> 5) & 0b11;
+	if(sh == 0){
+	  state->regs[rd]  = state->regs[rm] << shamt5;
+	  printf("lsl R%d, R%d << #%d\n",rd, rm, shamt5);
+	}else if(sh == 1){
+	}
+	//lsl
+      }else{
+     
       printf("MOV R%d, R%d\n", rd, rm);
       state->regs[rd] = state->regs[rm];
+      }
     }
     
     
@@ -384,6 +416,7 @@ unsigned int armemu(struct arm_state *state)
   int num_instructions = 0;
 
   while (state->regs[PC] != 0) {
+    // arm_state_print(state);
     get_instruction_type(state);
     num_instructions += 1;
   }
@@ -397,7 +430,7 @@ void sum_array_test(struct arm_state *state){
 
    
    state->regs[0] = array;
-   state->regs[1] = 5;
+   state->regs[1] = 5; 
    printf("------sum array \n------");
    res = armemu(state);
    printf("sum_array_s() = %d\n", res);
@@ -424,10 +457,10 @@ void print_analysis(struct arm_state *state){
  {
    struct arm_state state;
    arm_state_init(&state, (unsigned int *) fib_iter_s);
-   //   fib_iter_test(&state, 20);
+   fib_iter_test(&state, 20);
    // print_analysis(&state);
    arm_state_init(&state, (unsigned int *) sum_array_s);
-    sum_array_test(&state);
+   sum_array_test(&state);
    //unsigned int r;
    //   arm_state_init(&state, (unsigned int *) fib_iter_s, 20, 0, 0, 0);
    // r = armemu(&state);

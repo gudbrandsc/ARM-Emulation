@@ -18,7 +18,7 @@ playinst : playinst.c ${OBJS_PLAYINST}
 	gcc -o playinst playinst.c ${OBJS_PLAYINST}
 
 armemu : armemu.c ${OBJS_ARMEMU}
-	gcc -o armemu armemu.c ${OBJS_ARMEMU}
+	gcc ${CFLAGS} -o armemu armemu.c ${OBJS_ARMEMU}
 
 clean :
 	rm -rf ${PROGS} ${OBJS_PLAYINST}
