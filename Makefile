@@ -1,8 +1,8 @@
-PROGS = playinst armemu
+PROGS =  armemu
 
 
 OBJS_PLAYINST = add_s.o
-OBJS_ARMEMU = add_s.o sum_array_s.o fib_iter_s.o
+OBJS_ARMEMU = add_s.o sum_array_s.o fib_iter_s.o fib_rec_s.o find_max_s.o find_str_s.o
 
 CFLAGS = -g
 
