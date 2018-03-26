@@ -92,20 +92,21 @@ int get_process_inst(unsigned int iw) {
     return 0;
 }
 void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *analysis) {
-    unsigned int load, byte, rn, rd, offset, iw, u, immediate, sh, shamt5;
+    unsigned int op;
+    unsigned int load, byte, rn, rd, offset, iw, target, sp, u, b, immediate, value, sh, shamt5;
 
     iw = *((unsigned int *) state->regs[PC]);
     load = (iw >> 20) & 0b1;
     byte = (iw >> 22) & 0b1;
-    immediate = (iw >> 25) & 0b1;
+    immediate = (iw >> 25) &0b1;
     rn = (iw >> 16) & 0xF;
     rd = (iw >> 12) & 0xF;
     u = (iw >>23) & 0b1;
+    sp = state->regs[13];
     analysis->memory += 1;
-
-    if(load == 0 && byte == 0){ //Store
+    if(load == 0 && byte == 0){ //STR
         if(immediate == 0){
-            offset = iw & 0xFFF;
+            offset = iw & 0xFFF; //12 bits
         }else{
             analysis->regs_read[iw & 0xF] = 1;
             sh = (iw >> 5) & 0b11;
@@ -116,6 +117,7 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
                 offset = state->regs[iw & 0xF];
             }
         }
+
         if(u == 1){
             analysis->regs_read[rd] = 1;
             if(byte == 0){
@@ -130,23 +132,26 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
                 *((unsigned char *)(state->regs[rn] - offset)) = state->regs[rd];
             }
         }
-    }else if(load == 1){// Load
+    }else if(load == 1){// LDR
         if(immediate == 0){
-            offset = iw & 0xFFF;
+            offset = iw & 0xFFF; //12 bits
             analysis->regs_read[rn] += 1;
         }else{
+            offset = state->regs[iw & 0xF];
+            //      printf("val: %d\n", offset);
             sh = (iw >> 5) & 0b11;
             shamt5 = (iw >> 7) & 0b11111;
             if(sh == 0){
                 offset = state->regs[iw & 0xF << shamt5];
             }else{
                 offset = state->regs[iw & 0xF];
-            }
-            analysis->regs_read[rn] = 1;
-            analysis->regs_read[offset] = 1;
-        }
-        analysis->regs_write[rd] = 1;
 
+            }
+            //      analysis->regs_read[rn] = 1;
+            //      analysis->regs_read[offset] = 1;
+        }
+
+        analysis->regs_write[rd] = 1;
         if(u == 1){
             if(byte == 0){
                 state->regs[rd] = *((unsigned int *)(state->regs[rn] + offset));
