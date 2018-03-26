@@ -102,10 +102,11 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
     rd = (iw >> 12) & 0xF;
     u = (iw >>23) & 0b1;
     analysis->memory += 1;
-    
-    if(load == 0 && byte == 0){ //STR
+
+
+    if(load == 0 && byte == 0){ //Store
         if(immediate == 0){
-            offset = iw & 0xFFF; //12 bits
+            offset = iw & 0xFFF;
         }else{
             analysis->regs_read[iw & 0xF] = 1;
             sh = (iw >> 5) & 0b11;
@@ -131,25 +132,21 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
                 *((unsigned char *)(state->regs[rn] - offset)) = state->regs[rd];
             }
         }
-    }else if(load == 1){// LDR
+    }else if(load == 1){// Load
         if(immediate == 0){
-            offset = iw & 0xFFF; //12 bits
+            offset = iw & 0xFFF;
             analysis->regs_read[rn] += 1;
         }else{
-            offset = state->regs[iw & 0xF];
-            //      printf("val: %d\n", offset);
             sh = (iw >> 5) & 0b11;
             shamt5 = (iw >> 7) & 0b11111;
             if(sh == 0){
                 offset = state->regs[iw & 0xF << shamt5];
             }else{
                 offset = state->regs[iw & 0xF];
-
             }
-            //      analysis->regs_read[rn] = 1;
-            //      analysis->regs_read[offset] = 1;
+            analysis->regs_read[rn] = 1;
+            analysis->regs_read[offset] = 1;
         }
-
         analysis->regs_write[rd] = 1;
         if(u == 1){
             if(byte == 0){
