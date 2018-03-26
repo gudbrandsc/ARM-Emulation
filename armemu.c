@@ -56,7 +56,7 @@ void emu_analysis_init(struct emu_analysis_struct *analysis){
   }
 }
 
-void arm_state_init(struct arm_state *as, const unsigned int *func) {
+void arm_state_init(struct arm_state *as, unsigned int *func) {
   int i;
 
   /* zero out all arm state */
