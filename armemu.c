@@ -136,18 +136,19 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
             offset = iw & 0xFFF; //12 bits
             analysis->regs_read[rn] += 1;
         }else{
-            offset = state->regs[iw & 0xF];
-            //      printf("val: %d\n", offset);
+
             sh = (iw >> 5) & 0b11;
             shamt5 = (iw >> 7) & 0b11111;
             if(sh == 0){
                 offset = state->regs[iw & 0xF << shamt5];
+		analysis->regs_read[iw & 0xF << shamt5] = 1;
             }else{
                 offset = state->regs[iw & 0xF];
+		analysis->regs_read[iw & 0xF] = 1;
 
             }
-            //      analysis->regs_read[rn] = 1;
-            //      analysis->regs_read[offset] = 1;
+                  analysis->regs_read[rn] = 1;
+		 
         }
 
         analysis->regs_write[rd] = 1;
