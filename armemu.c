@@ -131,12 +131,11 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
                 *((unsigned char *)(state->regs[rn] - offset)) = state->regs[rd];
             }
         }
-    }else if(load == 1){// LDR
+    }else if(load == 1){// load
         if(immediate == 0){
-            offset = iw & 0xFFF; //12 bits
+            offset = iw & 0xFFF;
             analysis->regs_read[rn] += 1;
         }else{
-
             sh = (iw >> 5) & 0b11;
             shamt5 = (iw >> 7) & 0b11111;
             if(sh == 0){
@@ -145,13 +144,11 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
             }else{
                 offset = state->regs[iw & 0xF];
 		analysis->regs_read[iw & 0xF] = 1;
-
             }
-                  analysis->regs_read[rn] = 1;
-		 
+            analysis->regs_read[rn] = 1;
         }
-
         analysis->regs_write[rd] = 1;
+
         if(u == 1){
             if(byte == 0){
                 state->regs[rd] = *((unsigned int *)(state->regs[rn] + offset));
@@ -190,7 +187,6 @@ void execute_branch_inst(struct arm_state *state, struct emu_analysis_struct *an
     for(int i = 31; i >= 25; i--){
         imm24 = setBit(imm24, type, i);
     }
-
 
     if(type == 1){
         imm24 = ~(imm24) + 1;
@@ -523,7 +519,6 @@ void get_execution_time_emu(struct arm_state *state, struct emu_analysis_struct 
 }
 
 void sum_array_test(struct arm_state *state, int * array, int size, struct emu_analysis_struct *analysis){
-
     unsigned int res, res_emu, i;
 
     state->regs[0] = array;
@@ -558,7 +553,6 @@ void sum_array_test(struct arm_state *state, int * array, int size, struct emu_a
     res_emu = emulate_arm_func(state, analysis);
     printf("}, %d) = %d (Emulator)\n", size, res_emu);
 }
-
 
 void find_max_test(struct arm_state *state,  int *array, int size, struct emu_analysis_struct *analysis){
     unsigned int res, res_emu, i;
@@ -597,9 +591,6 @@ void find_max_test(struct arm_state *state,  int *array, int size, struct emu_an
 
 }
 
-
-
-
 void find_str_test(struct arm_state *state,  char *string, char *substring, struct emu_analysis_struct *analysis){
     state->regs[0] = string;
     state->regs[1] = substring;
@@ -619,7 +610,6 @@ void populate_large_array(int *array, int size){
 
 void run_sum_array_tests(struct arm_state*state, struct emu_analysis_struct *analysis,
                          int *array1, int *array2, int *array3, int *array4, int size){
-
     printf(" \n--------------- Sum Array Tests ----------------\n");
     arm_state_init(state, (unsigned int *) sum_array_s);
     sum_array_test(state, array1, size, analysis);
@@ -640,7 +630,6 @@ void run_sum_array_tests(struct arm_state*state, struct emu_analysis_struct *ana
 
 void run_find_max_tests(struct arm_state*state, struct emu_analysis_struct *analysis,
                         int *array1, int *array2, int *array3, int *array4, int size){
-
     printf(" \n--------------- Find Max Tests ----------------\n");
     arm_state_init(state, (unsigned int *) find_max_s);
     find_max_test(state, array1, size, analysis);
