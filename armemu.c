@@ -9,6 +9,7 @@
 #define LR 14
 #define PC 15
 
+int add_s(int a, int b);
 int sum_array_s(int *array, int i);
 int find_max_s(int *array, int i);
 int fib_iter_s(int n);
@@ -22,6 +23,7 @@ struct arm_state {
     int n;
     int p;
 };
+
 
 struct emu_analysis_struct {
     unsigned int regs_write[NREGS];
@@ -56,7 +58,8 @@ void emu_analysis_init(struct emu_analysis_struct *analysis){
   }
 }
 
-void arm_state_init(struct arm_state *as, unsigned int *func) {
+void arm_state_init(struct arm_state *as, unsigned int *func)
+{
   int i;
 
   /* zero out all arm state */
@@ -71,13 +74,29 @@ void arm_state_init(struct arm_state *as, unsigned int *func) {
   as->regs[PC] = (unsigned int) func;
   as->regs[SP] = (unsigned int) &as->stack[STACK_SIZE];
   as->regs[LR] = 0;
-  set_flag(0, 0, 0, as);
+  set_flag(0,0,0,as);
 }
 
-int get_process_inst(unsigned int iw) {
 
+
+void arm_state_print(struct arm_state *as)
+{
+  int i;
+
+  for (i = 0; i < NREGS; i++) {
+    printf("reg[%d] = %d\n", i, as->regs[i]);
+  }
+  printf("cpsr: n = %d z = %d p = %d\n", as->n, as->z, as->p);
+}
+
+
+int get_process_inst(unsigned int iw)
+{
+
+  unsigned int op;
   unsigned int cmd;
 
+  op = (iw >> 26) & 0b11;
   cmd = (iw >> 21) & 0b1111;
 
   if(cmd == 0b0100){ // if its a add
@@ -88,25 +107,28 @@ int get_process_inst(unsigned int iw) {
     return 3;
   }else if(cmd == 0b1010){
     return 4;
+  }else{
+    return false;
   }
-  return 0;
 }
 
-void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *analysis) {
-  unsigned int load, byte, rn, rd, offset, iw, u, immediate, sh, shamt5;
+int get_memory_inst(struct arm_state *state, struct emu_analysis_struct *analysis)
+{
+  unsigned int op;
+  unsigned int load, byte, rn, rd, offset, iw, target, sp, u, b, immediate, value, sh, shamt5;
 
   iw = *((unsigned int *) state->regs[PC]);
   load = (iw >> 20) & 0b1;
   byte = (iw >> 22) & 0b1;
-  immediate = (iw >> 25) & 0b1;
+  immediate = (iw >> 25) &0b1;
   rn = (iw >> 16) & 0xF;
   rd = (iw >> 12) & 0xF;
   u = (iw >>23) & 0b1;
+  sp = state->regs[13];
   analysis->memory += 1;
-
-  if(load == 0 && byte == 0){ //Store
+  if(load == 0 && byte == 0){ //STR
     if(immediate == 0){
-      offset = iw & 0xFFF;
+      offset = iw & 0xFFF; //12 bits
     }else{
       analysis->regs_read[iw & 0xF] = 1;
       sh = (iw >> 5) & 0b11;
@@ -117,6 +139,7 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
         offset = state->regs[iw & 0xF];
       }
     }
+
     if(u == 1){
       analysis->regs_read[rd] = 1;
       if(byte == 0){
@@ -131,23 +154,26 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
         *((unsigned char *)(state->regs[rn] - offset)) = state->regs[rd];
       }
     }
-  }else if(load == 1){// Load
+  }else if(load == 1){// LDR
     if(immediate == 0){
-      offset = iw & 0xFFF;
+      offset = iw & 0xFFF; //12 bits
       analysis->regs_read[rn] += 1;
     }else{
+      offset = state->regs[iw & 0xF];
+      //      printf("val: %d\n", offset);
       sh = (iw >> 5) & 0b11;
       shamt5 = (iw >> 7) & 0b11111;
       if(sh == 0){
         offset = state->regs[iw & 0xF << shamt5];
       }else{
         offset = state->regs[iw & 0xF];
-      }
-      analysis->regs_read[rn] = 1;
-      analysis->regs_read[offset] = 1;
-    }
-    analysis->regs_write[rd] = 1;
 
+      }
+      //      analysis->regs_read[rn] = 1;
+      //      analysis->regs_read[offset] = 1;
+    }
+
+    analysis->regs_write[rd] = 1;
     if(u == 1){
       if(byte == 0){
         state->regs[rd] = *((unsigned int *)(state->regs[rn] + offset));
@@ -169,7 +195,8 @@ int setBit(int value, int b, int index){
   return ( b << index) | value;
 }
 
-void execute_branch_inst(struct arm_state *state, struct emu_analysis_struct *analysis){
+//Handle branch
+void armemu_branch(struct arm_state *state, struct emu_analysis_struct *analysis){
   unsigned int iw, type, link_bit;
   int imm24;
 
@@ -198,11 +225,14 @@ void execute_branch_inst(struct arm_state *state, struct emu_analysis_struct *an
   }
 }
 
-int rightRotate(int n, unsigned int d) {
+unsigned int rightRotate(int n, unsigned int d)
+{
+
   return (n >> d)|(n << (32 - d));
+
 }
 
-void execute_add_inst(struct arm_state *state, struct emu_analysis_struct *analysis){
+void armemu_add(struct arm_state *state, struct emu_analysis_struct *analysis){
   unsigned int iw,rd, rn, rm, i, rot;
 
   iw = *((unsigned int *) state->regs[PC]);
@@ -231,13 +261,15 @@ void execute_add_inst(struct arm_state *state, struct emu_analysis_struct *analy
   }
 }
 
-void execute_sub_inst(struct arm_state *state, struct emu_analysis_struct *analysis) {
+void armemu_sub(struct arm_state *state, struct emu_analysis_struct *analysis)
+{
   unsigned int iw, rd, rn, rm, i, rot;
 
   iw = *((unsigned int *) state->regs[PC]);
   i = (iw >> 25) & 1;
   rd = (iw >> 12) & 0xF;
   rn = (iw >> 16) & 0xF;
+
 
   if(i == 1){
     rot = (iw >> 8) & 0xF;
@@ -260,12 +292,14 @@ void execute_sub_inst(struct arm_state *state, struct emu_analysis_struct *analy
   }
 }
 
-void execute_mov_inst(struct arm_state *state, struct emu_analysis_struct *analysis) {
-  unsigned int iw, rd, rm, i, rot, rsr, shamt5, sh;
+void armemu_mov(struct arm_state *state, struct emu_analysis_struct *analysis)
+{
+  unsigned int iw, rd, rn, rm, i, rot, rsr, shamt5, sh;
 
   iw = *((unsigned int *) state->regs[PC]);
   i = (iw >> 25) & 1;
   rd = (iw >> 12) & 0xF;
+  rn = (iw >> 16) & 0xF;
 
   if(i == 1){
     rot = (iw >> 8) & 0xF;
@@ -290,7 +324,6 @@ void execute_mov_inst(struct arm_state *state, struct emu_analysis_struct *analy
       state->regs[rd] = state->regs[rm];
     }
   }
-
   if (rd != PC) {
     analysis->regs_write[PC] = 1;
     analysis->regs_read[PC] = 1;
@@ -298,7 +331,8 @@ void execute_mov_inst(struct arm_state *state, struct emu_analysis_struct *analy
   }
 }
 
-void execute_cmp_inst(struct arm_state *state, struct emu_analysis_struct *analysis) {
+void armemu_cmp(struct arm_state *state, struct emu_analysis_struct *analysis)
+{
   unsigned int iw, rd, rn, rm, i;
   int res;
 
@@ -319,11 +353,11 @@ void execute_cmp_inst(struct arm_state *state, struct emu_analysis_struct *analy
   }
 
   if(res < 0){
-    set_flag(0, 1 ,0 ,state);
+    set_flag(0,1,0,state);
   }else if(res > 0){
-    set_flag(0,  0, 1, state);
+    set_flag(0,0,1,state);
   }else{
-    set_flag(1, 0, 0, state);
+    set_flag(1,0,0,state);
   }
 
   if (rd != PC) {
@@ -333,7 +367,8 @@ void execute_cmp_inst(struct arm_state *state, struct emu_analysis_struct *analy
   }
 }
 
-bool is_bx_inst(unsigned int iw) {
+bool is_bx_inst(unsigned int iw)
+{
   unsigned int bx_code;
 
   bx_code = (iw >> 4) & 0x00FFFFFF;
@@ -341,7 +376,8 @@ bool is_bx_inst(unsigned int iw) {
   return (bx_code == 0b000100101111111111110001);
 }
 
-void armemu_bx(struct arm_state *state) {
+void armemu_bx(struct arm_state *state)
+{
   unsigned int iw;
   unsigned int rn;
 
@@ -351,10 +387,10 @@ void armemu_bx(struct arm_state *state) {
   state->regs[PC] = state->regs[rn];
 }
 
-void execute_data_process(struct arm_state *state, struct emu_analysis_struct *analysis) {
+void armemu_data_process(struct arm_state *state, struct emu_analysis_struct *analysis)
+{
   unsigned int iw;
   int action_type;
-
   iw = *((unsigned int *) state->regs[PC]);
 
   if (is_bx_inst(iw)) {
@@ -364,26 +400,26 @@ void execute_data_process(struct arm_state *state, struct emu_analysis_struct *a
     analysis->computations += 1;
     switch(action_type){
       case 1 :
-        execute_add_inst(state, analysis);
+        armemu_add(state, analysis);
             break;
       case 2 :
-        execute_sub_inst(state, analysis);
+        armemu_sub(state, analysis);
             break;
       case 3 :
-        execute_mov_inst(state, analysis);
+        armemu_mov(state, analysis);
             break;
       case 4:
-        execute_cmp_inst(state, analysis);
+        armemu_cmp(state, analysis);
             break;
       default :
+        printf("default");
             exit(1);
     }
   }
 }
 
-void execute_instruction(struct arm_state *state, struct emu_analysis_struct *analysis){
+int get_instruction_type(struct arm_state *state, struct emu_analysis_struct *analysis){
   unsigned int op, iw, cond, run_command;
-
   iw = *((unsigned int *) state->regs[PC]);
   analysis->regs_read[PC] = 1;
   op = (iw >> 26) & 0b11;
@@ -408,11 +444,11 @@ void execute_instruction(struct arm_state *state, struct emu_analysis_struct *an
 
   if(run_command == 1){
     if(op == 0){
-      execute_data_process(state, analysis);
+      armemu_data_process(state, analysis);
     }else if(op == 1){
-      execute_memory_inst(state, analysis);
+      get_memory_inst(state, analysis);
     }else if(op == 2){
-      execute_branch_inst(state, analysis);
+      armemu_branch (state, analysis);
     }
   }else if((run_command == 0) && (op == 2)){
     analysis->branches_not_taken += 1;
@@ -420,24 +456,24 @@ void execute_instruction(struct arm_state *state, struct emu_analysis_struct *an
   }else{
     state->regs[PC] = state->regs[PC] + 4;
   }
-  analysis->num_instructions_ex += 1;
+  analysis->num_instructions_ex = analysis->num_instructions_ex + 1;
 
 }
 
-void print_analysis(struct emu_analysis_struct *analysis){
-  int i, count;
-
+void print_analysis(struct arm_state *state, struct emu_analysis_struct *analysis){
+  int i, j, count;
+  //  printf("------ARM emu analysis------\n");
+  //  arm_state_print(state);
   printf(" ______________________________________________\n");
   printf("|  Dynamic analysis of the function execution  |\n");
   printf(" ----------------------------------------------\n");
   printf("|- Number of instructions executed: %d\n", analysis->num_instructions_ex);
-  printf("|- Instruction counts :\n");
+  printf("|- Instruction counts :\n", analysis->num_instructions_ex);
   printf("|\t- Computations : %d\n", analysis->computations);
   printf("|\t- Memory : %d\n", analysis->memory);
   printf("|\t- Branches taken: %d\n", analysis->branches_taken);
   printf("|\t- Branches not taken: %d\n", analysis->branches_not_taken);
   printf("|- Read registers:  ");
-
   count = 0;
   for(i = 0; i < NREGS; i++){
     if(analysis->regs_read[i] == 1){
@@ -453,14 +489,13 @@ void print_analysis(struct emu_analysis_struct *analysis){
       }else if(i == 15){
         printf("PC");
       }else{
-        printf("r%d", i);
+        printf("r%d",i);
       }
-      if(i + 1 != NREGS){
+      if(i+1 != NREGS){
         printf(", ");
       }
     }
   }
-
   count = 0;
   printf("\n|- Write registers: ");
   for(i = 0; i < NREGS; i++){
@@ -477,24 +512,26 @@ void print_analysis(struct emu_analysis_struct *analysis){
       }else if(i == 15){
         printf("PC");
       }else{
-        printf("r%d", i);
+        printf("r%d",i);
       }
-      if(i + 1 != NREGS){
+      if(i+1 != NREGS){
         printf(", ");
       }
     }
   }
   printf("\n");
+  //Stack
 }
 
-unsigned int emulate_arm_func(struct arm_state *state, struct emu_analysis_struct *analysis){
+unsigned int armemu(struct arm_state *state, struct emu_analysis_struct *analysis){
   int num_instructions = 0;
   emu_analysis_init(analysis);
-
   while (state->regs[PC] != 0) {
-    execute_instruction(state, analysis);
+    get_instruction_type(state, analysis);
     num_instructions += 1;
   }
+
+  //  printf("Num instructions executed: %d\n", num_instructions);
   return state->regs[0];
 }
 
@@ -508,7 +545,7 @@ void get_execution_time_emu(struct arm_state *state, struct emu_analysis_struct 
 
   st_time = times(&st_cpu);
   for(int i = 0; i <= num; i++){
-    res = emulate_arm_func(state, analysis);
+    res = armemu(state, analysis);
   }
   en_time = times(&en_cpu);
   printf("\n|- Real Time: %d, User Time %d, System Time %d\n",
@@ -529,30 +566,30 @@ void sum_array_test(struct arm_state *state, int * array, int size, struct emu_a
     printf("%d,%d,%d...%d", array[0],array[1], array[2], array[size-1]);
   }else{
     for(i = 0; i < size; i++){
-      if(i + 1 == size){
-        printf("%d", array[i]);
+      if(i+1 == size){
+        printf("%d",array[i]);
       }else{
-        printf("%d, ", array[i]);
+        printf("%d, ",array[i]);
       }
     }
   }
-  res = sum_array_s(array, size);
+  res = sum_array_s(array,size);
 
   printf("}, %d) = %d\n",size, res);
   printf(" sum_array_s({");
   if(size > 10){
-    printf("%d,%d,%d...%d", array[0], array[1], array[2], array[size - 1]);
+    printf("%d,%d,%d...%d", array[0],array[1], array[2], array[size-1]);
   }else{
     for(i = 0; i < size; i++){
       if(i + 1 == size){
-        printf("%d", array[i]);
+        printf("%d",array[i]);
       }else{
-        printf("%d, ", array[i]);
+        printf("%d, ",array[i]);
       }
     }
   }
-  res_emu = emulate_arm_func(state, analysis);
-  printf("}, %d) = %d (Emulator)\n", size, res_emu);
+  res_emu = armemu(state, analysis);
+  printf("}, %d) = %d (Emulator)\n", size, res);
 }
 
 
@@ -567,29 +604,29 @@ void find_max_test(struct arm_state *state,  int *array, int size, struct emu_an
   }else{
     for(i = 0; i < size; i++){
       if(i+1 == size){
-        printf("%d", array[i]);
+        printf("%d",array[i]);
       }else{
         printf("%d, ",array[i]);
       }
     }
   }
-  res = sum_array_s(array, size);
+  res = sum_array_s(array,size);
 
   printf("}, %d) = %d\n",size, res);
   printf(" find_max_s({");
   if(size > 10){
-    printf("%d,%d,%d...%d", array[0], array[1], array[2], array[size - 1]);
+    printf("%d,%d,%d...%d", array[0],array[1], array[2], array[size-1]);
   }else{
     for(i = 0; i < size; i++){
       if(i + 1 == size){
-        printf("%d", array[i]);
+        printf("%d",array[i]);
       }else{
-        printf("%d, ", array[i]);
+        printf("%d, ",array[i]);
       }
     }
   }
-  res_emu = emulate_arm_func(state, analysis);
-  printf("}, %d) = %d (Emulator)\n", size, res_emu);
+  res_emu = armemu(state, analysis);
+  printf("}, %d) = %d (Emulator)\n", size, res);
 
 }
 
@@ -600,14 +637,15 @@ void find_str_test(struct arm_state *state,  char *string, char *substring, stru
   state->regs[0] = string;
   state->regs[1] = substring;
 
+
   printf(" find_str_s(%s,%s) = %d\n", string, substring, find_str_s(string, substring));
-  printf(" find_str_s(%s,%s) = %d (Emulator)\n", string, substring, emulate_arm_func(state, analysis));
+  printf(" find_str_s(%s,%s) = %d (Emulator)\n", string, substring, armemu(state, analysis));
 
 }
 
+
 void populate_large_array(int *array, int size){
   int i;
-
   for(i = 1; i < size + 1; i++){
     array[i - 1] = i;
   }
@@ -625,15 +663,13 @@ void run_sum_array_tests(struct arm_state*state, struct emu_analysis_struct *ana
   sum_array_test(state, array3, size, analysis);
   arm_state_init(state, (unsigned int *) sum_array_s);
   sum_array_test(state, array4, 2000, analysis);
-  print_analysis(analysis);
+  print_analysis(state, analysis);
   arm_state_init(state, (unsigned int *) sum_array_s);
   state->regs[0] = array4;
   state->regs[1] = 2000;
-  //Change - - -  -  -
   get_execution_time_emu(state, analysis);
   printf("\n ----------------------------------------------\n");
 }
-
 void run_find_max_tests(struct arm_state*state, struct emu_analysis_struct *analysis,
                         int *array1, int *array2, int *array3, int *array4, int size){
 
@@ -646,7 +682,7 @@ void run_find_max_tests(struct arm_state*state, struct emu_analysis_struct *anal
   find_max_test(state, array3, size, analysis);
   arm_state_init(state, (unsigned int *) find_max_s);
   find_max_test(state, array4, 2000, analysis);
-  print_analysis(analysis);
+  print_analysis(state, analysis);
   arm_state_init(state, (unsigned int *) find_max_s);
   state->regs[0] = array4;
   state->regs[1] = 2000;
@@ -655,10 +691,9 @@ void run_find_max_tests(struct arm_state*state, struct emu_analysis_struct *anal
 }
 
 void run_fib_iter_tests(struct arm_state*state, struct emu_analysis_struct *analysis, int n){
-  unsigned int i;
-  printf(" \n--------------- Testing Iterative Fibonacci Sequence To: %d ----------------\n", n);
-
-  printf("fib_iter_s: ");
+  unsigned int res, i;
+  printf(" \n--------------- Testing Iterativ Fibonacci Sequence To: %d ----------------\n", n);
+  printf("fib_iter_s: ", n);
   for( i = 0; i <= n; i++){
     if(i == n){
       printf("%d\n", fib_iter_s(i));
@@ -666,26 +701,25 @@ void run_fib_iter_tests(struct arm_state*state, struct emu_analysis_struct *anal
       printf("%d, ", fib_iter_s(i));
     }
   }
-
-  printf("fib_iter_s: ");
+  printf("fib_iter_s: ", n);
   for( i = 0; i <= n; i++){
     arm_state_init(state, (unsigned int *) fib_iter_s);
     state->regs[0] = i;
     if(i == n){
-      printf("%d", emulate_arm_func(state, analysis));
+      printf("%d", armemu(state, analysis));
     }else{
-      printf("%d, ", emulate_arm_func(state, analysis));
+      printf("%d, ", armemu(state, analysis));
     }
   }
   printf(" (Emulator)\n");
-  print_analysis(analysis);
+  print_analysis(state,analysis);
   printf("\n ----------------------------------------------\n");
 }
 
 void run_fib_rec_tests(struct arm_state*state, struct emu_analysis_struct *analysis, int n){
-  unsigned int i;
+  unsigned int res, i;
   printf(" \n--------------- Testing Recursive Fibonacci Sequence To: %d ----------------\n", n);
-  printf("fib_rec_s: ");
+  printf("fib_rec_s: ", n);
   for( i = 0; i <= n; i++){
     if(i == n){
       printf("%d\n", fib_rec_s(i));
@@ -693,21 +727,20 @@ void run_fib_rec_tests(struct arm_state*state, struct emu_analysis_struct *analy
       printf("%d, ", fib_rec_s(i));
     }
   }
-  printf("fib_rec_s: ");
+  printf("fib_rec_s: ", n);
   for( i = 0; i <= n; i++){
     arm_state_init(state, (unsigned int *) fib_rec_s);
     state->regs[0] = i;
     if(i == n){
-      printf("%d", emulate_arm_func(state, analysis));
+      printf("%d", armemu(state, analysis));
     }else{
-      printf("%d, ", emulate_arm_func(state, analysis));
+      printf("%d, ", armemu(state, analysis));
     }
   }
   printf(" (Emulator)\n");
-  print_analysis(analysis);
+  print_analysis(state,analysis);
   printf("\n ----------------------------------------------\n");
 }
-
 void run_find_str_tests(struct arm_state *state, struct emu_analysis_struct *analysis,
                         char *string1, char *string2, char *substring1, char *substring2, char *substring3){
 
@@ -720,7 +753,7 @@ void run_find_str_tests(struct arm_state *state, struct emu_analysis_struct *ana
   arm_state_init(state, (unsigned int *) find_str_s);
   find_str_test(state, string2, substring3, analysis);
 
-  print_analysis(analysis);
+  print_analysis(state, analysis);
   arm_state_init(state, (unsigned int *) find_str_s);
   state->regs[0] = string1;
   state->regs[1] = substring1;
@@ -728,12 +761,14 @@ void run_find_str_tests(struct arm_state *state, struct emu_analysis_struct *ana
   printf("\n ----------------------------------------------\n");
 }
 
-int main(int argc, char **argv){
+
+int main(int argc, char **argv)
+{
   struct arm_state state;
   struct emu_analysis_struct analysis;
-  int array1[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  int array2[] = {-5, -8, -3, -4, -1, -6, -7, -2, -9, -10};
-  int array3[] = {-1, 0, 8, 2, 0, 0, -2, 3, 7, -5};
+  int array1[] = {1,2,3,4,5,6,7,8,9,10};
+  int array2[] = {-5,-8,-3,-4,-1,-6,-7,-2,-9,-10};
+  int array3[] = {-1,0,8,2,0,0,-2, 3, 7,-5};
   int array4[2000];
   int size = 10;
   char string1[] = "abcddfghijdde";
@@ -748,6 +783,12 @@ int main(int argc, char **argv){
   run_fib_iter_tests(&state, &analysis, 20);
   run_fib_rec_tests(&state, &analysis, 20);
   run_find_str_tests(&state, &analysis, string1, string2, substring1, substring2, substring3);
+
+
+
+
+
+
 
   return 0;
 }
