@@ -105,20 +105,26 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
     analysis->memory += 1;
 
     if(load == 0 && byte == 0){ //Store
+        analysis->regs_read += 1;
+        analysis->regs_write += 1;
+
         if(immediate == 0){
             offset = iw & 0xFFF;
         }else{
-            analysis->regs_read[iw & 0xF] = 1;
             sh = (iw >> 5) & 0b11;
             shamt5 = (iw >> 7) & 0b111111;
+            analysis->regs_read += 1;
+
             if(sh == 0){
                 offset = state->regs[iw & 0xF << shamt5];
+                analysis->regs_write[iw & 0xF << shamt5] = 1;
             }else{
                 offset = state->regs[iw & 0xF];
+                analysis->regs_write[iw & 0xF] = 1;
             }
         }
         if(u == 1){
-            analysis->regs_read[rd] = 1;
+            analysis->regs_write[rd] = 1;
             if(byte == 0){
                 *((unsigned int *)(state->regs[rn] + offset)) = state->regs[rd];
             }else{
