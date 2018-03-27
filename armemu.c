@@ -105,26 +105,23 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
     analysis->memory += 1;
 
     if(load == 0 && byte == 0){ //Store
-        analysis->regs_read += 1;
-        analysis->regs_write += 1;
-
         if(immediate == 0){
             offset = iw & 0xFFF;
         }else{
             sh = (iw >> 5) & 0b11;
             shamt5 = (iw >> 7) & 0b111111;
-            analysis->regs_read += 1;
 
             if(sh == 0){
                 offset = state->regs[iw & 0xF << shamt5];
-                analysis->regs_write[iw & 0xF << shamt5] = 1;
+                analysis->regs_read[iw & 0xF << shamt5] = 1;
             }else{
                 offset = state->regs[iw & 0xF];
-                analysis->regs_write[iw & 0xF] = 1;
+                analysis->regs_read[iw & 0xF] = 1;
             }
         }
         if(u == 1){
             analysis->regs_write[rd] = 1;
+            analysis->regs_read[rn] = 1;
             if(byte == 0){
                 *((unsigned int *)(state->regs[rn] + offset)) = state->regs[rd];
             }else{
@@ -140,16 +137,15 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
     }else if(load == 1){// load
         if(immediate == 0){
             offset = iw & 0xFFF;
-            analysis->regs_read[rn] += 1;
         }else{
             sh = (iw >> 5) & 0b11;
             shamt5 = (iw >> 7) & 0b11111;
             if(sh == 0){
                 offset = state->regs[iw & 0xF << shamt5];
-		analysis->regs_read[iw & 0xF << shamt5] = 1;
+		        analysis->regs_read[iw & 0xF << shamt5] = 1;
             }else{
                 offset = state->regs[iw & 0xF];
-		analysis->regs_read[iw & 0xF] = 1;
+		        analysis->regs_read[iw & 0xF] = 1;
             }
             analysis->regs_read[rn] = 1;
         }
@@ -185,6 +181,7 @@ void execute_branch_inst(struct arm_state *state, struct emu_analysis_struct *an
     type = (iw >> 23) & 0b1;
     link_bit = (iw >> 24) & 0b1;
     analysis->branches_taken += 1;
+
     if(link_bit == 1){
         state->regs[LR] = state->regs[PC] + 4;
     }
@@ -427,7 +424,6 @@ void execute_instruction(struct arm_state *state, struct emu_analysis_struct *an
         state->regs[PC] = state->regs[PC] + 4;
     }
     analysis->num_instructions_ex += 1;
-
 }
 
 void print_analysis(struct emu_analysis_struct *analysis){
