@@ -102,7 +102,6 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
     rn = (iw >> 16) & 0xF;
     rd = (iw >> 12) & 0xF;
     u = (iw >>23) & 0b1;
-    analysis->memory += 1;
 
     if(load == 0 && byte == 0){ //Store
         if(immediate == 0){
@@ -413,14 +412,19 @@ void execute_instruction(struct arm_state *state, struct emu_analysis_struct *an
         if(op == 0){
             execute_data_process(state, analysis);
         }else if(op == 1){
+            analysis->memory += 1;
             execute_memory_inst(state, analysis);
         }else if(op == 2){
             execute_branch_inst(state, analysis);
         }
-    }else if((run_command == 0) && (op == 2)){
-        analysis->branches_not_taken += 1;
-        state->regs[PC] = state->regs[PC] + 4;
     }else{
+        if(op == 0){
+            analysis->computations += 1;
+        }else if(op == 1){
+            analysis->memory += 1;
+        }else if(op == 2){
+            analysis->branches_not_taken += 1;
+        }
         state->regs[PC] = state->regs[PC] + 4;
     }
     analysis->num_instructions_ex += 1;
