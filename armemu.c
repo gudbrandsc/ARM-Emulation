@@ -358,6 +358,7 @@ void execute_data_process(struct arm_state *state, struct emu_analysis_struct *a
     iw = *((unsigned int *) state->regs[PC]);
 
     if (is_bx_inst(iw)) {
+        analysis->branches_taken += 1;
         armemu_bx(state);
     }else{
         action_type = get_process_inst(iw);
@@ -385,7 +386,6 @@ void execute_instruction(struct arm_state *state, struct emu_analysis_struct *an
     unsigned int op, iw, cond, run_command;
 
     iw = *((unsigned int *) state->regs[PC]);
-    analysis->regs_read[PC] = 1;
     op = (iw >> 26) & 0b11;
     cond = (iw >> 28) & 0xF;
 
