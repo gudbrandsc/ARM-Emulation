@@ -27,7 +27,7 @@ struct emu_analysis_struct {
     unsigned int regs_write[NREGS];
     unsigned int regs_read[NREGS];
     int num_instructions_ex;
-    int computations;
+    int data_processing;
     int memory;
     int branches_taken;
     int branches_not_taken;
@@ -45,7 +45,7 @@ void emu_analysis_init(struct emu_analysis_struct *analysis){
     int i;
 
     analysis->num_instructions_ex = 0;
-    analysis->computations = 0;
+    analysis->data_processing = 0;
     analysis->memory = 0;
     analysis->branches_taken = 0;
     analysis->branches_not_taken = 0;
@@ -109,7 +109,6 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
         }else{
             sh = (iw >> 5) & 0b11;
             shamt5 = (iw >> 7) & 0b111111;
-
             if(sh == 0){
                 offset = state->regs[iw & 0xF << shamt5];
                 analysis->regs_read[iw & 0xF << shamt5] = 1;
@@ -118,6 +117,7 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
                 analysis->regs_read[iw & 0xF] = 1;
             }
         }
+
         if(u == 1){
             analysis->regs_write[rd] = 1;
             analysis->regs_read[rn] = 1;
@@ -141,10 +141,10 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
             shamt5 = (iw >> 7) & 0b11111;
             if(sh == 0){
                 offset = state->regs[iw & 0xF << shamt5];
-		        analysis->regs_read[iw & 0xF << shamt5] = 1;
+                analysis->regs_read[iw & 0xF << shamt5] = 1;
             }else{
                 offset = state->regs[iw & 0xF];
-		        analysis->regs_read[iw & 0xF] = 1;
+                analysis->regs_read[iw & 0xF] = 1;
             }
             analysis->regs_read[rn] = 1;
         }
@@ -321,7 +321,7 @@ void execute_cmp_inst(struct arm_state *state, struct emu_analysis_struct *analy
     }
 
     if(res < 0){
-        set_flag(0, 1 ,0 ,state);
+        set_flag(0, 1 ,0 , state);
     }else if(res > 0){
         set_flag(0,  0, 1, state);
     }else{
@@ -364,7 +364,7 @@ void execute_data_process(struct arm_state *state, struct emu_analysis_struct *a
         armemu_bx(state);
     }else{
         action_type = get_process_inst(iw);
-        analysis->computations += 1;
+        analysis->data_processing += 1;
         switch(action_type){
             case 1 :
                 execute_add_inst(state, analysis);
@@ -419,7 +419,7 @@ void execute_instruction(struct arm_state *state, struct emu_analysis_struct *an
         }
     }else{
         if(op == 0){
-            analysis->computations += 1;
+            analysis->data_processing += 1;
         }else if(op == 1){
             analysis->memory += 1;
         }else if(op == 2){
@@ -438,7 +438,7 @@ void print_analysis(struct emu_analysis_struct *analysis){
     printf(" ----------------------------------------------\n");
     printf("|- Number of instructions executed: %d\n", analysis->num_instructions_ex);
     printf("|- Instruction counts :\n");
-    printf("|\t- Computations : %d\n", analysis->computations);
+    printf("|\t- Data_processing : %d\n", analysis->data_processing);
     printf("|\t- Memory : %d\n", analysis->memory);
     printf("|\t- Branches taken: %d\n", analysis->branches_taken);
     printf("|\t- Branches not taken: %d\n", analysis->branches_not_taken);
@@ -505,33 +505,32 @@ unsigned int emulate_arm_func(struct arm_state *state, struct emu_analysis_struc
 }
 
 void get_execution_time_analysis(struct arm_state *state, struct emu_analysis_struct *analysis, int *array, int array_size, int fib_num, char *string, char *substring){
-  int res, emu_time, reg_time;
+    int res, emu_time, reg_time;
     int num = 500000;
     int num_small = 300;
     static clock_t st_time;
     static clock_t en_time;
     static struct tms st_cpu;
     static struct tms en_cpu;
-    
+
     //Get time analysis for sum array
     st_time = times(&st_cpu);
 
     for(int i = 0; i <= num; i++){
-      arm_state_init(state, (unsigned int *) sum_array_s);
-      state->regs[0] = array;
-      state->regs[1] = array_size;
-      res = emulate_arm_func(state, analysis);
+        arm_state_init(state, (unsigned int *) sum_array_s);
+        state->regs[0] = array;
+        state->regs[1] = array_size;
+        res = emulate_arm_func(state, analysis);
     }
-    
+
     en_time = times(&en_cpu);
     emu_time = (int)(en_time - st_time);
-    
     st_time = times(&st_cpu);
 
     for(int i = 0; i <= num; i++){
-      sum_array_s(array, array_size);
+        sum_array_s(array, array_size);
     }
-    
+
     en_time = times(&en_cpu);
     reg_time = (int)(en_time - st_time);
     printf("- sum_array_s() with %d elements\n", array_size);
@@ -541,23 +540,23 @@ void get_execution_time_analysis(struct arm_state *state, struct emu_analysis_st
     printf("\t\t- Ratio: %f clockticks\n\n", emu_time/(float)reg_time);
 
     //Get time analysis for find max
-     st_time = times(&st_cpu);
+    st_time = times(&st_cpu);
 
-     for(int i = 0; i <= num; i++){
-      arm_state_init(state, (unsigned int *) find_max_s);
-      state->regs[0] = array;
-      state->regs[1] = array_size;
-      res = emulate_arm_func(state, analysis);
+    for(int i = 0; i <= num; i++){
+        arm_state_init(state, (unsigned int *) find_max_s);
+        state->regs[0] = array;
+        state->regs[1] = array_size;
+        res = emulate_arm_func(state, analysis);
     }
-     
+
     en_time = times(&en_cpu);
     emu_time = (int)(en_time - st_time);
     st_time = times(&st_cpu);
 
     for(int i = 0; i <= num; i++){
-      find_max_s(array, array_size);
+        find_max_s(array, array_size);
     }
-    
+
     en_time = times(&en_cpu);
     reg_time = (int)(en_time - st_time);
     printf("- find_max_s() with %d elements\n", array_size);
@@ -570,19 +569,19 @@ void get_execution_time_analysis(struct arm_state *state, struct emu_analysis_st
     st_time = times(&st_cpu);
 
     for(int i = 0; i <= num; i++){
-      arm_state_init(state, (unsigned int *) fib_iter_s);
-      state->regs[0] = fib_num;
-      res = emulate_arm_func(state, analysis);
+        arm_state_init(state, (unsigned int *) fib_iter_s);
+        state->regs[0] = fib_num;
+        res = emulate_arm_func(state, analysis);
     }
-    
+
     en_time = times(&en_cpu);
     emu_time = (int)(en_time - st_time);
     st_time = times(&st_cpu);
 
     for(int i = 0; i <= num; i++){
-      fib_iter_s(fib_num);
+        fib_iter_s(fib_num);
     }
-    
+
     en_time = times(&en_cpu);
     reg_time = (int)(en_time - st_time);
     printf("- fib_iter_s() sequence number  %d \n", fib_num);
@@ -595,19 +594,19 @@ void get_execution_time_analysis(struct arm_state *state, struct emu_analysis_st
     st_time = times(&st_cpu);
 
     for(int i = 0; i <= num_small; i++){
-      arm_state_init(state, (unsigned int *) fib_rec_s);
-      state->regs[0] = fib_num;
-      res = emulate_arm_func(state, analysis);
+        arm_state_init(state, (unsigned int *) fib_rec_s);
+        state->regs[0] = fib_num;
+        res = emulate_arm_func(state, analysis);
     }
-    
+
     en_time = times(&en_cpu);
     emu_time = (int)(en_time - st_time);
     st_time = times(&st_cpu);
 
     for(int i = 0; i <= num_small; i++){
-      fib_rec_s(fib_num);
+        fib_rec_s(fib_num);
     }
-    
+
     en_time = times(&en_cpu);
     reg_time = (int)(en_time - st_time);
     printf("- fib_rec_s() sequence number  %d \n", fib_num);
@@ -615,25 +614,25 @@ void get_execution_time_analysis(struct arm_state *state, struct emu_analysis_st
     printf("\t\t- Emulated: %f clockticks\n", emu_time/(float)num_small);
     printf("\t\t- Nativ: %f clockticks,\n", reg_time/(float)num_small);
     printf("\t\t- Ratio: %f clockticks\n\n", emu_time/(float)reg_time);
-    
+
     //Get time analysis for find sub string
     st_time = times(&st_cpu);
 
     for(int i = 0; i <= num; i++){
-      arm_state_init(state, (unsigned int *) find_str_s);
-      state->regs[0] = string;
-      state->regs[1] = substring;
-      res = emulate_arm_func(state, analysis);
+        arm_state_init(state, (unsigned int *) find_str_s);
+        state->regs[0] = string;
+        state->regs[1] = substring;
+        res = emulate_arm_func(state, analysis);
     }
-    
+
     en_time = times(&en_cpu);
     emu_time = (int)(en_time - st_time);
     st_time = times(&st_cpu);
 
     for(int i = 0; i <= num; i++){
-      find_str_s(string, substring);
+        find_str_s(string, substring);
     }
-    
+
     en_time = times(&en_cpu);
     reg_time = (int)(en_time - st_time);
     printf("- find_str_s() with string and substring \"%s\": \"%s\"\n", string, substring);
@@ -713,7 +712,6 @@ void find_max_test(struct arm_state *state,  int *array, int size, struct emu_an
     }
     res_emu = emulate_arm_func(state, analysis);
     printf("}, %d) = %d (Emulator)\n", size, res_emu);
-
 }
 
 void find_str_test(struct arm_state *state,  char *string, char *substring, struct emu_analysis_struct *analysis){
@@ -722,7 +720,6 @@ void find_str_test(struct arm_state *state,  char *string, char *substring, stru
 
     printf(" find_str_s(%s,%s) = %d\n", string, substring, find_str_s(string, substring));
     printf(" find_str_s(%s,%s) = %d (Emulator)\n", string, substring, emulate_arm_func(state, analysis));
-
 }
 
 void populate_large_array(int *array, int size){
@@ -735,16 +732,16 @@ void populate_large_array(int *array, int size){
 
 void run_sum_array_tests(struct arm_state*state, struct emu_analysis_struct *analysis,
                          int *array1, int *array2, int *array3, int *array4, int size){
- 
-  printf(" \n--------------- Sum Array Tests ----------------\n");
-  arm_state_init(state, (unsigned int *) sum_array_s);
-  sum_array_test(state, array1, size, analysis);
-  arm_state_init(state, (unsigned int *) sum_array_s);
-  sum_array_test(state, array2, size, analysis);
-  arm_state_init(state, (unsigned int *) sum_array_s);
-  sum_array_test(state, array3, size, analysis);
-  arm_state_init(state, (unsigned int *) sum_array_s);
-  sum_array_test(state, array4, 2000, analysis);
+
+    printf(" \n--------------- Sum Array Tests ----------------\n");
+    arm_state_init(state, (unsigned int *) sum_array_s);
+    sum_array_test(state, array1, size, analysis);
+    arm_state_init(state, (unsigned int *) sum_array_s);
+    sum_array_test(state, array2, size, analysis);
+    arm_state_init(state, (unsigned int *) sum_array_s);
+    sum_array_test(state, array3, size, analysis);
+    arm_state_init(state, (unsigned int *) sum_array_s);
+    sum_array_test(state, array4, 2000, analysis);
 }
 
 void run_find_max_tests(struct arm_state*state, struct emu_analysis_struct *analysis,
@@ -764,7 +761,7 @@ void run_fib_iter_tests(struct arm_state*state, struct emu_analysis_struct *anal
     unsigned int i;
     printf(" \n--------------- Testing Iterative Fibonacci Sequence To: %d ----------------\n", n);
 
-    printf("fib_iter_s: ");
+    printf(" fib_iter_s: ");
     for( i = 0; i <= n; i++){
         if(i == n){
             printf("%d\n", fib_iter_s(i));
@@ -773,7 +770,7 @@ void run_fib_iter_tests(struct arm_state*state, struct emu_analysis_struct *anal
         }
     }
 
-    printf("fib_iter_s: ");
+    printf(" fib_iter_s: ");
     for( i = 0; i <= n; i++){
         arm_state_init(state, (unsigned int *) fib_iter_s);
         state->regs[0] = i;
@@ -789,7 +786,7 @@ void run_fib_iter_tests(struct arm_state*state, struct emu_analysis_struct *anal
 void run_fib_rec_tests(struct arm_state*state, struct emu_analysis_struct *analysis, int n){
     unsigned int i;
     printf(" \n--------------- Testing Recursive Fibonacci Sequence To: %d ----------------\n", n);
-    printf("fib_rec_s: ");
+    printf(" fib_rec_s: ");
     for( i = 0; i <= n; i++){
         if(i == n){
             printf("%d\n", fib_rec_s(i));
@@ -797,7 +794,7 @@ void run_fib_rec_tests(struct arm_state*state, struct emu_analysis_struct *analy
             printf("%d, ", fib_rec_s(i));
         }
     }
-    printf("fib_rec_s: ");
+    printf(" fib_rec_s: ");
     for( i = 0; i <= n; i++){
         arm_state_init(state, (unsigned int *) fib_rec_s);
         state->regs[0] = i;
@@ -812,7 +809,6 @@ void run_fib_rec_tests(struct arm_state*state, struct emu_analysis_struct *analy
 
 void run_find_str_tests(struct arm_state *state, struct emu_analysis_struct *analysis,
                         char *string1, char *string2, char *substring1, char *substring2, char *substring3){
-
     printf(" \n--------------- Find Max Tests ----------------\n");
     arm_state_init(state, (unsigned int *) find_str_s);
     find_str_test(state, string1, substring1, analysis);
@@ -824,45 +820,45 @@ void run_find_str_tests(struct arm_state *state, struct emu_analysis_struct *ana
 }
 
 void sum_array_analysis(struct arm_state *state, int * array, int size, struct emu_analysis_struct *analysis){
-  printf(" \n--------------- Sum Array Analysis ----------------\n");
-  arm_state_init(state, (unsigned int *) sum_array_s);
-  sum_array_test(state, array, size, analysis);
-  print_analysis(analysis);
+    printf(" \n--------------- Sum Array Analysis ----------------\n");
+    arm_state_init(state, (unsigned int *) sum_array_s);
+    sum_array_test(state, array, size, analysis);
+    print_analysis(analysis);
 }
 
 void find_max_analysis(struct arm_state *state, int * array, int size, struct emu_analysis_struct *analysis){
-  printf(" \n--------------- Find Max Analysis ----------------\n");
-  arm_state_init(state, (unsigned int *) find_max_s);
-  find_max_test(state, array, size, analysis);
-  print_analysis(analysis);
+    printf(" \n--------------- Find Max Analysis ----------------\n");
+    arm_state_init(state, (unsigned int *) find_max_s);
+    find_max_test(state, array, size, analysis);
+    print_analysis(analysis);
 }
 
 void fib_iter_analysis(struct arm_state *state, int fib_num, struct emu_analysis_struct *analysis){
-  int res;
-  printf(" \n--------------- Fib Iterativ Analysis  ----------------\n");
-  arm_state_init(state, (unsigned int *) fib_iter_s);
-  state->regs[0] = fib_num;
-  res = emulate_arm_func(state, analysis);
-  printf("fib_rec_s(%d) = %d\n", fib_num, res);
-  print_analysis(analysis);
+    int res;
+    printf(" \n--------------- Fib Iterativ Analysis  ----------------\n");
+    arm_state_init(state, (unsigned int *) fib_iter_s);
+    state->regs[0] = fib_num;
+    res = emulate_arm_func(state, analysis);
+    printf("fib_rec_s(%d) = %d\n", fib_num, res);
+    print_analysis(analysis);
 }
 
 void fib_rec_analysis(struct arm_state *state, int fib_num, struct emu_analysis_struct *analysis){
-  int res;
-  printf(" \n--------------- Fib Recursive Analysis ----------------\n");
-  arm_state_init(state, (unsigned int *) fib_rec_s);
-  state->regs[0] = fib_num;
-  res = emulate_arm_func(state, analysis);
-  printf("fib_rec_s(%d) = %d\n", fib_num, res);
-  print_analysis(analysis);
+    int res;
+    printf(" \n--------------- Fib Recursive Analysis ----------------\n");
+    arm_state_init(state, (unsigned int *) fib_rec_s);
+    state->regs[0] = fib_num;
+    res = emulate_arm_func(state, analysis);
+    printf("fib_rec_s(%d) = %d\n", fib_num, res);
+    print_analysis(analysis);
 }
 
 void find_str_analysis(struct arm_state *state, char* string, char* substring,
-		       struct emu_analysis_struct *analysis){
-  printf(" \n--------------- Find substring Analysis ----------------\n");
-  arm_state_init(state, (unsigned int *) find_str_s);
-  find_str_test(state, string, substring, analysis);
-  print_analysis(analysis);
+                       struct emu_analysis_struct *analysis){
+    printf(" \n--------------- Find substring Analysis ----------------\n");
+    arm_state_init(state, (unsigned int *) find_str_s);
+    find_str_test(state, string, substring, analysis);
+    print_analysis(analysis);
 }
 void print_header(char* string){
     printf(" ________________________________________________________________________________________\n");
@@ -901,6 +897,6 @@ int main(int argc, char **argv){
     find_str_analysis(&state, string1, substring1, &analysis);
 
     print_header("Performance Measurements");
-    get_execution_time_analysis(&state, &analysis, array1, size, 20, string1, substring1);
+    get_execution_time_analysis(&state, &analysis, array1, size, fib_num, string1, substring1);
     return 0;
 }
