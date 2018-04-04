@@ -117,7 +117,7 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
     rn = (iw >> 16) & 0xF;
     rd = (iw >> 12) & 0xF;
     u = (iw >> 23) & 0b1;
-    set_memory_offset(state, analysis, offset, iw);
+    set_memory_offset(state, analysis, &offset, iw);
     if (load == 0 && byte == 0) { //Store
         if (u == 1) {
             analysis->regs_write[rd] = 1;
