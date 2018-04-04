@@ -91,6 +91,22 @@ int get_process_inst(unsigned int iw) {
     }
     return 0;
 }
+void set_memory_offset(struct arm_state *state, struct emu_analysis_struct *analysis, unsigned int* offset, unsigned int *iw){
+    immediate = (iw >> 25) & 0b1;
+    if (immediate == 0) {
+        offset = iw & 0xFFF;
+    } else {
+        sh = (iw >> 5) & 0b11;
+        shamt5 = (iw >> 7) & 0b111111;
+        if (sh == 0) {
+            offset = state->regs[iw & 0xF << shamt5];
+            analysis->regs_read[iw & 0xF << shamt5] = 1;
+        } else {
+            offset = state->regs[iw & 0xF];
+            analysis->regs_read[iw & 0xF] = 1;
+        }
+    }
+}
 
 void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *analysis) {
     unsigned int load, byte, rn, rd, offset, iw, u, immediate, sh, shamt5;
@@ -98,26 +114,11 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
     iw = *((unsigned int *) state->regs[PC]);
     load = (iw >> 20) & 0b1;
     byte = (iw >> 22) & 0b1;
-    immediate = (iw >> 25) & 0b1;
     rn = (iw >> 16) & 0xF;
     rd = (iw >> 12) & 0xF;
     u = (iw >> 23) & 0b1;
-
+    set_memory_offset(state, analysis, offset, iw);
     if (load == 0 && byte == 0) { //Store
-        if (immediate == 0) {
-            offset = iw & 0xFFF;
-        } else {
-            sh = (iw >> 5) & 0b11;
-            shamt5 = (iw >> 7) & 0b111111;
-            if (sh == 0) {
-                offset = state->regs[iw & 0xF << shamt5];
-                analysis->regs_read[iw & 0xF << shamt5] = 1;
-            } else {
-                offset = state->regs[iw & 0xF];
-                analysis->regs_read[iw & 0xF] = 1;
-            }
-        }
-
         if (u == 1) {
             analysis->regs_write[rd] = 1;
             analysis->regs_read[rn] = 1;
@@ -164,8 +165,11 @@ void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *an
             }
         }
     }
+
     state->regs[PC] = state->regs[PC] + 4;
 }
+
+
 
 int setBit(int value, int b, int index) {
     return (b << index) | value;
