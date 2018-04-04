@@ -91,85 +91,78 @@ int get_process_inst(unsigned int iw) {
     }
     return 0;
 }
-void set_memory_offset(struct arm_state *state, struct emu_analysis_struct *analysis, unsigned int* offset, unsigned int iw){
-    immediate = (iw >> 25) & 0b1;
-    if (immediate == 0) {
-        offset = iw & 0xFFF;
+
+unsigned int set_memory_offset(struct arm_state *state, struct emu_analysis_struct *analysis){
+  unsigned int sh, shamt5, iw, immediate;
+  iw = *((unsigned int *) state->regs[PC]);
+  immediate = (iw >> 25) & 0b1;
+  
+  if (immediate == 0) {
+    return iw & 0xFFF;
+  } else {  
+    sh = (iw >> 5) & 0b11;
+    shamt5 = (iw >> 7) & 0b11111;
+    if (sh == 0) {
+      analysis->regs_read[iw & 0xF << shamt5] = 1;
+      return state->regs[iw & 0xF << shamt5];
     } else {
-        sh = (iw >> 5) & 0b11;
-        shamt5 = (iw >> 7) & 0b111111;
-        if (sh == 0) {
-            offset = state->regs[iw & 0xF << shamt5];
-            analysis->regs_read[iw & 0xF << shamt5] = 1;
-        } else {
-            offset = state->regs[iw & 0xF];
-            analysis->regs_read[iw & 0xF] = 1;
-        }
+      analysis->regs_read[iw & 0xF] = 1;
+      return state->regs[iw & 0xF];
     }
+  }
 }
 
 void execute_memory_inst(struct arm_state *state, struct emu_analysis_struct *analysis) {
-    unsigned int load, byte, rn, rd, offset, iw, u, immediate, sh, shamt5;
+  unsigned int load, byte, rn, rd, offset, iw, u, immediate;
 
-    iw = *((unsigned int *) state->regs[PC]);
-    load = (iw >> 20) & 0b1;
-    byte = (iw >> 22) & 0b1;
-    rn = (iw >> 16) & 0xF;
-    rd = (iw >> 12) & 0xF;
-    u = (iw >> 23) & 0b1;
-    set_memory_offset(state, analysis, &offset, iw);
-    if (load == 0 && byte == 0) { //Store
-        if (u == 1) {
-            analysis->regs_write[rd] = 1;
-            analysis->regs_read[rn] = 1;
-            if (byte == 0) {
-                *((unsigned int *) (state->regs[rn] + offset)) = state->regs[rd];
-            } else {
-                *((unsigned char *) (state->regs[rn] + offset)) = state->regs[rd];
-            }
-        } else {
-            if (byte == 0) {
-                *((unsigned int *) (state->regs[rn] - offset)) = state->regs[rd];
-            } else {
-                *((unsigned char *) (state->regs[rn] - offset)) = state->regs[rd];
-            }
-        }
-    } else if (load == 1) {// load
-        if (immediate == 0) {
-            offset = iw & 0xFFF;
-        } else {
-            sh = (iw >> 5) & 0b11;
-            shamt5 = (iw >> 7) & 0b11111;
-            if (sh == 0) {
-                offset = state->regs[iw & 0xF << shamt5];
-                analysis->regs_read[iw & 0xF << shamt5] = 1;
-            } else {
-                offset = state->regs[iw & 0xF];
-                analysis->regs_read[iw & 0xF] = 1;
-            }
-            analysis->regs_read[rn] = 1;
-        }
-        analysis->regs_write[rd] = 1;
+  iw = *((unsigned int *) state->regs[PC]);
+  load = (iw >> 20) & 0b1;
+  byte = (iw >> 22) & 0b1;
+  
+  rn = (iw >> 16) & 0xF;
+  rd = (iw >> 12) & 0xF;
+  u = (iw >> 23) & 0b1;
+  offset = set_memory_offset (state, analysis);
 
-        if (u == 1) {
-            if (byte == 0) {
-                state->regs[rd] = *((unsigned int *) (state->regs[rn] + offset));
-            } else {
-                state->regs[rd] = *((unsigned char *) (state->regs[rn] + offset));
-            }
-        } else {
-            if (byte == 0) {
-                state->regs[rd] = *((unsigned int *) (state->regs[rn] - offset));
-            } else {
-                state->regs[rd] = *((unsigned char *) (state->regs[rn] - offset));
-            }
-        }
+ 
+  if (load == 0 && byte == 0) { //Store
+    if (u == 1) {
+      analysis->regs_write[rd] = 1;
+      analysis->regs_read[rn] = 1;
+      if (byte == 0) {
+	*((unsigned int *) (state->regs[rn] + offset)) = state->regs[rd];
+      } else {
+	*((unsigned char *) (state->regs[rn] + offset)) = state->regs[rd];
+      }
+    } else {
+      if (byte == 0) {
+	*((unsigned int *) (state->regs[rn] - offset)) = state->regs[rd];
+      } else {
+	*((unsigned char *) (state->regs[rn] - offset)) = state->regs[rd];
+      }
     }
+  } else if (load == 1) {// load
+    if(immediate != 0){
+      analysis->regs_read[rn] = 1;
+    }
+    analysis->regs_write[rd] = 1;
 
-    state->regs[PC] = state->regs[PC] + 4;
+    if (u == 1) {
+      if (byte == 0) {
+	state->regs[rd] = *((unsigned int *) (state->regs[rn] + offset));
+      } else {
+	state->regs[rd] = *((unsigned char *) (state->regs[rn] + offset));
+      }
+    } else {
+      if (byte == 0) {
+	state->regs[rd] = *((unsigned int *) (state->regs[rn] - offset));
+      } else {
+	state->regs[rd] = *((unsigned char *) (state->regs[rn] - offset));
+      }
+    }
+  }
+  state->regs[PC] = state->regs[PC] + 4;
 }
-
-
 
 int setBit(int value, int b, int index) {
     return (b << index) | value;
