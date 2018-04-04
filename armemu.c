@@ -200,6 +200,24 @@ void execute_branch_inst(struct arm_state *state, struct emu_analysis_struct *an
 int rightRotate(int n, unsigned int d) {
     return (n >> d) | (n << (32 - d));
 }
+unsigned int get_rm_value(struct emu_analysis_struct *analysis, unsigned int iw, unsigned int i, unsigned int rd, unsigned int rn){
+  unsigned int rot, rm;
+
+    if (i == 1) {
+      rot = (iw >> 8) & 0xF;
+      rm = iw & 0xFF;
+      rot = rot * 2;
+      rm = rightRotate(rm, rot);
+      analysis->regs_read[rn] = 1;
+      analysis->regs_write[rd] = 1;
+    } else {
+      rm = iw & 0xF;
+      analysis->regs_write[rd] = 1;
+      analysis->regs_read[rn] = 1;
+      analysis->regs_read[rm] = 1;
+    }
+    return rm;
+}
 
 void execute_add_inst(struct arm_state *state, struct emu_analysis_struct *analysis) {
     unsigned int iw, rd, rn, rm, i, rot;
@@ -208,20 +226,10 @@ void execute_add_inst(struct arm_state *state, struct emu_analysis_struct *analy
     i = (iw >> 25) & 1;
     rd = (iw >> 12) & 0xF;
     rn = (iw >> 16) & 0xF;
-
+    rm = get_rm_value(analysis, iw, i, rd, rn);
     if (i == 1) {
-        rot = (iw >> 8) & 0xF;
-        rm = iw & 0xFF;
-        rot = rot * 2;
-        rm = rightRotate(rm, rot);
-        analysis->regs_read[rn] = 1;
-        analysis->regs_write[rd] = 1;
         state->regs[rd] = state->regs[rn] + rm;
     } else {
-        rm = iw & 0xF;
-        analysis->regs_write[rd] = 1;
-        analysis->regs_read[rn] = 1;
-        analysis->regs_read[rm] = 1;
         state->regs[rd] = state->regs[rn] + state->regs[rm];
     }
 
@@ -237,25 +245,16 @@ void execute_sub_inst(struct arm_state *state, struct emu_analysis_struct *analy
     i = (iw >> 25) & 1;
     rd = (iw >> 12) & 0xF;
     rn = (iw >> 16) & 0xF;
-
+    rm = get_rm_value(analysis, iw, i, rd, rn);
+    
     if (i == 1) {
-        rot = (iw >> 8) & 0xF;
-        rm = iw & 0xFF;
-        rot = rot * 2;
-        rm = rightRotate(rm, rot);
-        analysis->regs_read[rn] = 1;
-        analysis->regs_write[rd] = 1;
-        state->regs[rd] = state->regs[rn] - rm;
+      state->regs[rd] = state->regs[rn] - rm;
     } else {
-        rm = iw & 0xF;
-        analysis->regs_write[rd] = 1;
-        analysis->regs_read[rn] = 1;
-        analysis->regs_read[rm] = 1;
-        state->regs[rd] = state->regs[rn] - state->regs[rm];
+      state->regs[rd] = state->regs[rn] - state->regs[rm];
     }
 
     if (rd != PC) {
-        state->regs[PC] = state->regs[PC] + 4;
+      state->regs[PC] = state->regs[PC] + 4;
     }
 }
 
@@ -265,7 +264,6 @@ void execute_mov_inst(struct arm_state *state, struct emu_analysis_struct *analy
     iw = *((unsigned int *) state->regs[PC]);
     i = (iw >> 25) & 1;
     rd = (iw >> 12) & 0xF;
-
     if (i == 1) {
         rot = (iw >> 8) & 0xF;
         rm = iw & 0xFF;
