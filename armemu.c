@@ -91,7 +91,7 @@ int get_process_inst(unsigned int iw) {
     }
     return 0;
 }
-void set_memory_offset(struct arm_state *state, struct emu_analysis_struct *analysis, unsigned int* offset, unsigned int *iw){
+void set_memory_offset(struct arm_state *state, struct emu_analysis_struct *analysis, unsigned int* offset, unsigned int iw){
     immediate = (iw >> 25) & 0b1;
     if (immediate == 0) {
         offset = iw & 0xFFF;
